@@ -76,7 +76,14 @@ jobs:
         else
           echo "should_deploy=false" >> $GITHUB_OUTPUT
         fi
-        
+  # vars workaround
+  vars:
+    runs-on: ubuntu-22.04
+    outputs:
+      SERVICE_NAME: ${{ env.SERVICE_NAME }}
+      API_CONFIG_PATH: ${{ env.API_CONFIG_PATH}}
+    steps:
+      - run: echo "Exposing env vars"      
   # Build, test, and generate API specifications
   build-and-test:
     runs-on: ubuntu-latest
@@ -137,7 +144,7 @@ jobs:
         #   http://localhost:3000/api-docs.json
         
         # Example: Generate a sample OpenAPI spec (replace with your actual generation)
-        cat > generated-specs/${{ env.SERVICE_NAME }}.openapi.json << 'EOF'
+        cat > generated-specs/${{ needs.vars.outputs.SERVICE_NAME }}.openapi.json << 'EOF'
         {
           "openapi": "3.0.3",
           "info": {
@@ -161,11 +168,11 @@ jobs:
         EOF
         
         # Verify spec was generated
-        SPEC_FILE="generated-specs/${{ env.SERVICE_NAME }}.openapi.json"
+        SPEC_FILE="generated-specs/${{ needs.vars.outputs.SERVICE_NAME }}.openapi.json"
         if [[ -f "$SPEC_FILE" ]]; then
           echo "✅ API specification generated: $SPEC_FILE"
           echo "spec-generated=true" >> $GITHUB_OUTPUT
-          echo "spec-file-name=${{ env.SERVICE_NAME }}.openapi.json" >> $GITHUB_OUTPUT
+          echo "spec-file-name=${{ needs.vars.outputs.SERVICE_NAME }}.openapi.json" >> $GITHUB_OUTPUT
           
           # Validate the generated spec
           npx @apidevtools/swagger-cli validate "$SPEC_FILE"
@@ -187,7 +194,7 @@ jobs:
       with:
         name: service-artifacts
         path: |
-          ${{ env.API_CONFIG_PATH }}
+          ${{ needs.vars.outputs.API_CONFIG_PATH }}
         retention-days: 7
         
   # Validate API configuration using generated specs
@@ -199,13 +206,11 @@ jobs:
       uses: shane-m-holland/azure-apim-bicep/.github/workflows/validate-config.yml@v1
       with:
         environment: dev  # Use dev for validation
-        api-config-path: ${{ env.API_CONFIG_PATH }}
+        api-config-path: ${{ needs.vars.outputs.API_CONFIG_PATH }}
         api-spec-path: ${{ needs.build-and-test.outputs.spec-file-name }}
         config-repo: shane-m-holland/example-apim-infrastructure
         # Note: Validation workflow will need to be updated to support artifacts
         # For now, this validates the config structure
-      secrets:
-        CONFIG_REPO_TOKEN: ${{ secrets.CONFIG_REPO_TOKEN }}
         
   # Deploy API to APIM using generated specifications
   deploy-api:
@@ -215,8 +220,8 @@ jobs:
     uses: shane-m-holland/azure-apim-bicep/.github/workflows/deploy-api.yml@v1
     with:
       environment: ${{ needs.determine-environment.outputs.environment }}
-      service-name: ${{ env.SERVICE_NAME }}
-      api-config-path: ${{ env.API_CONFIG_PATH }}
+      service-name: ${{ needs.vars.outputs.SERVICE_NAME }}
+      api-config-path: ${{ needs.vars.outputs.API_CONFIG_PATH }}
       config-repo: shane-m-holland/example-apim-infrastructure
       deployment-mode: ${{ inputs.deployment_mode || 'sync' }}
       parallel-deployment: true
@@ -231,7 +236,6 @@ jobs:
       
     secrets:
       AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
-      CONFIG_REPO_TOKEN: ${{ secrets.CONFIG_REPO_TOKEN }}
       
   # Post-deployment testing (optional)
   post-deployment-test:
@@ -285,7 +289,7 @@ jobs:
     - name: Post to Slack/Teams (customize as needed)
       run: |
         echo "${{ steps.status.outputs.message }}"
-        echo "Service: ${{ env.SERVICE_NAME }}"
+        echo "Service: ${{ needs.vars.outputs.SERVICE_NAME }}"
         echo "Environment: ${{ needs.determine-environment.outputs.environment }}"
         echo "Commit: ${{ github.sha }}"
         
@@ -314,5 +318,5 @@ jobs:
             deployment_id: deployment.data.id,
             state: '${{ steps.status.outputs.status == 'success' && 'success' || 'failure' }}',
             description: '${{ steps.status.outputs.message }}',
-            environment_url: 'https://afdevapi.developer.azure-api.net/${{ env.SERVICE_NAME }}'
+            environment_url: 'https://afdevapi.developer.azure-api.net/${{ needs.vars.outputs.SERVICE_NAME }}'
           });
