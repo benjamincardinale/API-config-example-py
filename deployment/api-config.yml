@@ -1,7 +1,7 @@
 - apiId: hellow-demo-api
   displayName: Hello World Demo API
   path: /
-  specPath: ./specs/hellow.openapi.yaml
+  specPath: ./specs/openapi.yaml
   format: openapi
   serviceUrl: https://127.0.0.1:8000
   protocols:                           
