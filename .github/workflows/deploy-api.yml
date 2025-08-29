@@ -144,7 +144,7 @@ jobs:
         #   http://localhost:3000/api-docs.json
         
         # Example: Generate a sample OpenAPI spec (replace with your actual generation)
-        cat > generated-specs/${{ needs.vars.outputs.SERVICE_NAME }}.openapi.json << 'EOF'
+        cat > generated-specs/${{ env.SERVICE_NAME }}.openapi.json << 'EOF'
         {
           "openapi": "3.0.3",
           "info": {
@@ -168,11 +168,11 @@ jobs:
         EOF
         
         # Verify spec was generated
-        SPEC_FILE="generated-specs/${{ needs.vars.outputs.SERVICE_NAME }}.openapi.json"
+        SPEC_FILE="generated-specs/${{ env.SERVICE_NAME }}.openapi.json"
         if [[ -f "$SPEC_FILE" ]]; then
           echo "✅ API specification generated: $SPEC_FILE"
           echo "spec-generated=true" >> $GITHUB_OUTPUT
-          echo "spec-file-name=${{ needs.vars.outputs.SERVICE_NAME }}.openapi.json" >> $GITHUB_OUTPUT
+          echo "spec-file-name=${{ env.SERVICE_NAME }}.openapi.json" >> $GITHUB_OUTPUT
           
           # Validate the generated spec
           npx @apidevtools/swagger-cli validate "$SPEC_FILE"
@@ -194,12 +194,12 @@ jobs:
       with:
         name: service-artifacts
         path: |
-          ${{ needs.vars.outputs.API_CONFIG_PATH }}
+          ${{ env.API_CONFIG_PATH }}
         retention-days: 7
         
   # Validate API configuration using generated specs
   validate-api-config:
-    needs: [build-and-test]
+    needs: [build-and-test, vars]
     runs-on: ubuntu-latest
     steps:
     - name: Validate API Configuration (with artifacts)
@@ -214,7 +214,7 @@ jobs:
         
   # Deploy API to APIM using generated specifications
   deploy-api:
-    needs: [determine-environment, build-and-test, validate-api-config]
+    needs: [determine-environment, build-and-test, validate-api-config, vars]
     if: needs.determine-environment.outputs.should_deploy == 'true' && needs.build-and-test.outputs.api-spec-generated == 'true'
     
     uses: shane-m-holland/azure-apim-bicep/.github/workflows/deploy-api.yml@v1
@@ -289,7 +289,7 @@ jobs:
     - name: Post to Slack/Teams (customize as needed)
       run: |
         echo "${{ steps.status.outputs.message }}"
-        echo "Service: ${{ needs.vars.outputs.SERVICE_NAME }}"
+        echo "Service: ${{ env.SERVICE_NAME }}"
         echo "Environment: ${{ needs.determine-environment.outputs.environment }}"
         echo "Commit: ${{ github.sha }}"
         
@@ -318,5 +318,5 @@ jobs:
             deployment_id: deployment.data.id,
             state: '${{ steps.status.outputs.status == 'success' && 'success' || 'failure' }}',
             description: '${{ steps.status.outputs.message }}',
-            environment_url: 'https://afdevapi.developer.azure-api.net/${{ needs.vars.outputs.SERVICE_NAME }}'
+            environment_url: 'https://afdevapi.developer.azure-api.net/${{ env.SERVICE_NAME }}'
           });
