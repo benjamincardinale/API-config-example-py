@@ -19,9 +19,9 @@ on:
     branches-ignore:
       - main
       - develop
-    paths:
-      - 'specs/**'
-      - 'deployment/**'
+    # paths:
+    #   - 'specs/**'
+    #   - 'deployment/**'
       
   # Allow manual validation
   workflow_dispatch:

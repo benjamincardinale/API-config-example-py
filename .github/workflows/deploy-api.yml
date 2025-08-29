@@ -15,10 +15,10 @@ on:
       - phase-two
       - develop      # Deploy to dev environment
       - main         # Deploy to prod environment
-    paths:
-      - 'src/**'
-      - 'specs/**'
-      - 'deployment/**'
+    # paths:
+    #   - 'src/**'
+    #   - 'specs/**'
+    #   - 'deployment/**'
       
   # Manual deployment with environment selection
   workflow_dispatch:
