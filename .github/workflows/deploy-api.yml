@@ -201,16 +201,16 @@ jobs:
   validate-api-config:
     needs: [build-and-test, vars]
     uses: shane-m-holland/azure-apim-bicep/.github/workflows/validate-config.yml@v1
-    steps:
-    - name: Validate API Configuration (with artifacts)
-      with:
-        environment: dev  # Use dev for validation
-        api-config-path: ${{ needs.vars.outputs.API_CONFIG_PATH }}
-        api-spec-path: ${{ needs.build-and-test.outputs.spec-file-name }}
-        config-repo: shane-m-holland/example-apim-infrastructure
-        # Note: Validation workflow will need to be updated to support artifacts
-        # For now, this validates the config structure
-        
+    with:
+      environment: dev  # Use dev for validation
+      api-config-path: ${{ needs.vars.outputs.API_CONFIG_PATH }}
+      api-spec-path: ${{ needs.build-and-test.outputs.spec-file-name }}
+      config-repo: shane-m-holland/example-apim-infrastructure
+      # Note: Validation workflow will need to be updated to support artifacts
+      # For now, this validates the config structure
+    secrets:
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+
   # Deploy API to APIM using generated specifications
   deploy-api:
     needs: [determine-environment, build-and-test, validate-api-config, vars]
