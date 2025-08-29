@@ -200,12 +200,12 @@ jobs:
   # Validate API configuration using generated specs
   validate-api-config:
     needs: [build-and-test, vars]
-    uses: shane-m-holland/azure-apim-bicep/.github/workflows/validate-config.yml@v1
+    uses: benjamincardinale/azure-apim-bicep/.github/workflows/validate-config.yml@v1
     with:
       environment: dev  # Use dev for validation
       api-config-path: ${{ needs.vars.outputs.API_CONFIG_PATH }}
       api-spec-path: ${{ needs.build-and-test.outputs.spec-file-name }}
-      config-repo: shane-m-holland/example-apim-infrastructure
+      config-repo: benjamincardinale/example-apim-infrastructure
       # Note: Validation workflow will need to be updated to support artifacts
       # For now, this validates the config structure
     secrets:
@@ -216,12 +216,12 @@ jobs:
     needs: [determine-environment, build-and-test, validate-api-config, vars]
     if: needs.determine-environment.outputs.should_deploy == 'true' && needs.build-and-test.outputs.api-spec-generated == 'true'
     
-    uses: shane-m-holland/azure-apim-bicep/.github/workflows/deploy-api.yml@v1
+    uses: benjamincardinale/azure-apim-bicep/.github/workflows/deploy-api.yml@v1
     with:
       environment: ${{ needs.determine-environment.outputs.environment }}
       service-name: ${{ needs.vars.outputs.SERVICE_NAME }}
       api-config-path: ${{ needs.vars.outputs.API_CONFIG_PATH }}
-      config-repo: shane-m-holland/example-apim-infrastructure
+      config-repo: benjamincardinale/example-apim-infrastructure
       deployment-mode: ${{ inputs.deployment_mode || 'sync' }}
       parallel-deployment: true
       dry-run: ${{ inputs.dry_run || false }}
