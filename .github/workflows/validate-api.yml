@@ -57,11 +57,11 @@ jobs:
     
     - name: Setup build environment
       run: python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-        echo "Setting up build environment..."
+        
         
     - name: Install dependencies
       run: source .venv/bin/activate && python export_openapi_yaml.py 
-        echo "Installing dependencies..."
+       
         
     - name: Generate API specification
       id: generate
