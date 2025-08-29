@@ -1,5 +1,10 @@
 # Example GitHub Actions Workflow for Service Repository
 # Copy this file to your service repository at: .github/workflows/deploy-api.yml
+#
+# This example demonstrates the ARTIFACT-BASED approach where API specifications
+# are generated during the build process and deployed from artifacts.
+# 
+# For the traditional repository-based approach, see: deploy-api-traditional.yml
 
 name: Deploy API to APIM
 
@@ -7,6 +12,7 @@ on:
   # Automatic deployment on merges
   push:
     branches:
+      - phase-two
       - develop      # Deploy to dev environment
       - main         # Deploy to prod environment
     paths:
@@ -43,9 +49,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SERVICE_NAME: user-service  # Change this to your service name
+  SERVICE_NAME: hello-world  # Change this to your service name
   API_CONFIG_PATH: deployment/api-config.yml
-  API_SPEC_PATH: specs/api.openapi.yml
+  # Note: API_SPEC_PATH not needed in artifact-based approach
+  # Specs are generated and uploaded as artifacts
 
 jobs:
   # Determine target environment based on branch or manual input
@@ -70,20 +77,18 @@ jobs:
           echo "should_deploy=false" >> $GITHUB_OUTPUT
         fi
         
-  # Build and test the service (customize as needed)
+  # Build, test, and generate API specifications
   build-and-test:
     runs-on: ubuntu-latest
+    outputs:
+      api-spec-generated: ${{ steps.generate-spec.outputs.spec-generated }}
+      spec-file-name: ${{ steps.generate-spec.outputs.spec-file-name }}
     steps:
     - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
     
     - name: Setup build environment
-      run: |
-        # Add your build setup here (Node.js, .NET, Java, etc.)
-        # Example for Node.js:
-        # - uses: actions/setup-node@v4
-        #   with:
-        #     node-version: '18'
-        #     cache: 'npm'
+      run: python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
         echo "Setting up build environment..."
         
     - name: Install dependencies
@@ -94,64 +99,136 @@ jobs:
         echo "Installing dependencies..."
         
     - name: Run tests
-      run: |
-        # Add your test commands here
-        # Example for Node.js:
-        # npm test
+      run: source .venv/bin/activate && python export_openapi_yaml.py 
         echo "Running tests..."
         
-    - name: Validate API specification
+    - name: Generate API specification
+      id: generate-spec
       run: |
-        # Validate API spec exists and is valid
-        if [[ -f "${{ env.API_SPEC_PATH }}" ]]; then
-          echo "✅ API specification found: ${{ env.API_SPEC_PATH }}"
+        echo "🔧 Generating API specification from code..."
+        
+        # Create output directory for generated specs
+        mkdir -p generated-specs
+        
+        # Example spec generation approaches:
+        
+        # For ASP.NET Core with Swashbuckle:
+        # dotnet run --project src/YourAPI --urls "http://localhost:5000" &
+        # sleep 10
+        # curl -o generated-specs/${{ env.SERVICE_NAME }}.openapi.json \
+        #   http://localhost:5000/swagger/v1/swagger.json
+        
+        # For Spring Boot:
+        # ./mvnw spring-boot:run -Dspring-boot.run.arguments="--server.port=8080" &
+        # sleep 15
+        # curl -o generated-specs/${{ env.SERVICE_NAME }}.openapi.json \
+        #   http://localhost:8080/v3/api-docs
+        
+        # For FastAPI:
+        # uvicorn src.main:app --host 0.0.0.0 --port 8000 &
+        # sleep 10
+        # curl -o generated-specs/${{ env.SERVICE_NAME }}.openapi.json \
+        #   http://localhost:8000/openapi.json
+        
+        # For Node.js/Express with Swagger:
+        # npm start &
+        # sleep 10  
+        # curl -o generated-specs/${{ env.SERVICE_NAME }}.openapi.json \
+        #   http://localhost:3000/api-docs.json
+        
+        # Example: Generate a sample OpenAPI spec (replace with your actual generation)
+        cat > generated-specs/${{ env.SERVICE_NAME }}.openapi.json << 'EOF'
+        {
+          "openapi": "3.0.3",
+          "info": {
+            "title": "${{ env.SERVICE_NAME }} API",
+            "version": "1.0.0",
+            "description": "Generated API specification"
+          },
+          "paths": {
+            "/health": {
+              "get": {
+                "summary": "Health check",
+                "responses": {
+                  "200": {
+                    "description": "Service is healthy"
+                  }
+                }
+              }
+            }
+          }
+        }
+        EOF
+        
+        # Verify spec was generated
+        SPEC_FILE="generated-specs/${{ env.SERVICE_NAME }}.openapi.json"
+        if [[ -f "$SPEC_FILE" ]]; then
+          echo "✅ API specification generated: $SPEC_FILE"
+          echo "spec-generated=true" >> $GITHUB_OUTPUT
+          echo "spec-file-name=${{ env.SERVICE_NAME }}.openapi.json" >> $GITHUB_OUTPUT
           
-          # Basic OpenAPI validation (install swagger-tools or similar)
-          # npx swagger-tools validate ${{ env.API_SPEC_PATH }}
+          # Validate the generated spec
+          npx @apidevtools/swagger-cli validate "$SPEC_FILE"
+          echo "✅ Generated API specification is valid"
         else
-          echo "❌ API specification not found: ${{ env.API_SPEC_PATH }}"
+          echo "❌ Failed to generate API specification"
           exit 1
         fi
         
-    - name: Upload build artifacts
+    - name: Upload API specification artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: api-specs
+        path: generated-specs/
+        retention-days: 7
+        
+    - name: Upload build artifacts (config only)
       uses: actions/upload-artifact@v4
       with:
         name: service-artifacts
         path: |
           ${{ env.API_CONFIG_PATH }}
-          ${{ env.API_SPEC_PATH }}
         retention-days: 7
         
-  # Validate API configuration
+  # Validate API configuration using generated specs
   validate-api-config:
+    needs: [build-and-test]
     runs-on: ubuntu-latest
     steps:
-    - name: Validate API Configuration
-      uses: your-org/azure-apim-bicep/.github/workflows/validate-config.yml@v1
+    - name: Validate API Configuration (with artifacts)
+      uses: shane-m-holland/azure-apim-bicep/.github/workflows/validate-config.yml@v1
       with:
         environment: dev  # Use dev for validation
         api-config-path: ${{ env.API_CONFIG_PATH }}
-        api-spec-path: ${{ env.API_SPEC_PATH }}
-        config-repo: your-org/infra-config-repo
+        api-spec-path: ${{ needs.build-and-test.outputs.spec-file-name }}
+        config-repo: shane-m-holland/example-apim-infrastructure
+        # Note: Validation workflow will need to be updated to support artifacts
+        # For now, this validates the config structure
       secrets:
         CONFIG_REPO_TOKEN: ${{ secrets.CONFIG_REPO_TOKEN }}
         
-  # Deploy API to APIM
+  # Deploy API to APIM using generated specifications
   deploy-api:
     needs: [determine-environment, build-and-test, validate-api-config]
-    if: needs.determine-environment.outputs.should_deploy == 'true'
+    if: needs.determine-environment.outputs.should_deploy == 'true' && needs.build-and-test.outputs.api-spec-generated == 'true'
     
-    uses: your-org/azure-apim-bicep/.github/workflows/deploy-api.yml@v1
+    uses: shane-m-holland/azure-apim-bicep/.github/workflows/deploy-api.yml@v1
     with:
       environment: ${{ needs.determine-environment.outputs.environment }}
       service-name: ${{ env.SERVICE_NAME }}
       api-config-path: ${{ env.API_CONFIG_PATH }}
-      api-spec-path: ${{ env.API_SPEC_PATH }}
-      config-repo: your-org/infra-config-repo
+      config-repo: shane-m-holland/example-apim-infrastructure
       deployment-mode: ${{ inputs.deployment_mode || 'sync' }}
       parallel-deployment: true
       dry-run: ${{ inputs.dry_run || false }}
       apim-tooling-version: v1  # Pin to specific version
+      
+      # NEW: Artifact-based specification parameters
+      use-spec-artifact: true
+      spec-artifact-name: api-specs
+      spec-artifact-path: ${{ needs.build-and-test.outputs.spec-file-name }}
+      # build-workflow-run-id not needed - using same workflow run
+      
     secrets:
       AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
       CONFIG_REPO_TOKEN: ${{ secrets.CONFIG_REPO_TOKEN }}
@@ -173,7 +250,7 @@ jobs:
         echo "Running post-deployment integration tests..."
         
         # Example: Test API endpoints
-        # APIM_BASE_URL="https://your-apim-instance.azure-api.net"
+        # APIM_BASE_URL="https://afdevapi.developer.azure-api.net/"
         # curl -f "$APIM_BASE_URL/${{ env.SERVICE_NAME }}/health" || exit 1
         
     - name: Performance tests (for production)
@@ -237,5 +314,5 @@ jobs:
             deployment_id: deployment.data.id,
             state: '${{ steps.status.outputs.status == 'success' && 'success' || 'failure' }}',
             description: '${{ steps.status.outputs.message }}',
-            environment_url: 'https://your-apim-instance.azure-api.net/${{ env.SERVICE_NAME }}'
+            environment_url: 'https://afdevapi.developer.azure-api.net/${{ env.SERVICE_NAME }}'
           });
