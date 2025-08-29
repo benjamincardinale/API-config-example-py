@@ -37,6 +37,14 @@ env:
   # Note: API specs are generated during build, not committed to repo
 
 jobs:
+  # vars workaround
+  vars:
+    runs-on: ubuntu-22.04
+    outputs:
+      SERVICE_NAME: ${{ env.SERVICE_NAME }}
+      API_CONFIG_PATH: ${{ env.API_CONFIG_PATH}}
+    steps:
+      - run: echo "Exposing env vars"      
   # Build and generate API specification for validation
   build-and-generate-spec:
     runs-on: ubuntu-latest
@@ -237,13 +245,13 @@ jobs:
         
   # Validate against APIM deployment (dry run with artifacts)
   validate-apim-deployment:
-    needs: [build-and-generate-spec, validate-api-spec, validate-api-config]
+    needs: [build-and-generate-spec, validate-api-spec, validate-api-config, vars]
     if: inputs.validate_deployment != false && needs.build-and-generate-spec.outputs.spec-generated == 'true'
     uses: shane-m-holland/azure-apim-bicep/.github/workflows/deploy-api.yml@v1
     with:
       environment: dev  # Use dev environment for validation
-      service-name: ${{ env.SERVICE_NAME }}
-      api-config-path: ${{ env.API_CONFIG_PATH }}
+      service-name: ${{ needs.vars.outputs.SERVICE_NAME }}
+      api-config-path: ${{ needs.vars.outputs.API_CONFIG_PATH }}
       config-repo: shane-m-holland/example-apim-infrastructure
       deployment-mode: deploy
       dry-run: true  # Important: Only validate, don't actually deploy
