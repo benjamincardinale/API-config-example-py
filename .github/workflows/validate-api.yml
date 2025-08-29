@@ -239,28 +239,23 @@ jobs:
   validate-apim-deployment:
     needs: [build-and-generate-spec, validate-api-spec, validate-api-config]
     if: inputs.validate_deployment != false && needs.build-and-generate-spec.outputs.spec-generated == 'true'
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Validate APIM Deployment (Dry Run with Artifacts)
-      uses: shane-m-holland/azure-apim-bicep/.github/workflows/deploy-api.yml@v1
-      with:
-        environment: dev  # Use dev environment for validation
-        service-name: ${{ env.SERVICE_NAME }}
-        api-config-path: ${{ env.API_CONFIG_PATH }}
-        config-repo: shane-m-holland/example-apim-infrastructure
-        deployment-mode: deploy
-        dry-run: true  # Important: Only validate, don't actually deploy
-        apim-tooling-version: v1
-        
-        # Use artifact-based specification
-        use-spec-artifact: true
-        spec-artifact-name: validation-api-specs
-        spec-artifact-path: ${{ needs.build-and-generate-spec.outputs.spec-file-name }}
-        
-      secrets:
-        AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
-        CONFIG_REPO_TOKEN: ${{ secrets.CONFIG_REPO_TOKEN }}
+    uses: shane-m-holland/azure-apim-bicep/.github/workflows/deploy-api.yml@v1
+    with:
+      environment: dev  # Use dev environment for validation
+      service-name: ${{ env.SERVICE_NAME }}
+      api-config-path: ${{ env.API_CONFIG_PATH }}
+      config-repo: shane-m-holland/example-apim-infrastructure
+      deployment-mode: deploy
+      dry-run: true  # Important: Only validate, don't actually deploy
+      apim-tooling-version: v1
+      
+      # Use artifact-based specification
+      use-spec-artifact: true
+      spec-artifact-name: validation-api-specs
+      spec-artifact-path: ${{ needs.build-and-generate-spec.outputs.spec-file-name }}
+      
+    secrets:
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
         
   # Comment on PR with validation results
   comment-on-pr:
